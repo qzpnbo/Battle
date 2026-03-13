@@ -4,10 +4,10 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Character.h"
-#include "Enermy.generated.h"
+#include "Enemy.generated.h"
 
 UCLASS()
-class BATTLE_API AEnermy : public ACharacter
+class BATTLE_API AEnemy : public ACharacter
 {
 	GENERATED_BODY()
 
@@ -16,10 +16,13 @@ private:
 
 public:
 	// Sets default values for this character's properties
-	AEnermy();
+	AEnemy();
 
 	UPROPERTY(BlueprintReadWrite, Category = "Enermy")
 	float MaxHealth; // 最大生命值
+
+	UPROPERTY(EditInstanceOnly, BlueprintReadWrite, Category = "Enermy")
+	FVector InitialLocation; // 初始位置
 
 	UFUNCTION(BlueprintCallable, Category = "Enermy")
 	void MoveLoop(); // 移动
