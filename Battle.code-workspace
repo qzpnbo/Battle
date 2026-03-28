@@ -18,13 +18,47 @@
 			"DOTNET_HOST_PATH": "E:\\Epic Games\\UE_5.5\\Engine\\Binaries\\ThirdParty\\DotNet\\8.0.300\\win-x64\\dotnet.exe",
 			"DOTNET_MULTILEVEL_LOOKUP": "0",
 			"DOTNET_ROLL_FORWARD": "LatestMajor"
+		},
+		"files.exclude": {
+			"**/Binaries": true,
+			"**/Intermediate": true,
+			"**/Saved": true,
+			"**/DerivedDataCache": true
+		},
+		"files.associations": {
+			"*.generated.h": "cpp",
+			"*.gen.cpp": "cpp"
+		},
+		"files.watcherExclude": {
+			"**/Binaries/**": true,
+			"**/Intermediate/**": true,
+			"**/Saved/**": true,
+			"**/DerivedDataCache/**": true,
+			"**/.git/objects/**": true,
+			"**/Engine/Binaries/**": true,
+			"**/Engine/Intermediate/**": true,
+			"**/Engine/Saved/**": true,
+			"**/Engine/DerivedDataCache/**": true
+		},
+		"search.exclude": {
+			"**/Binaries": true,
+			"**/Intermediate": true,
+			"**/Saved": true,
+			"**/DerivedDataCache": true,
+			"**/Engine/Source/ThirdParty": true
+		},
+		"C_Cpp.default.browse.limitSymbolsToIncludedHeaders": true,
+		"C_Cpp.dimInactiveRegions": false,
+		"C_Cpp.autocompleteAddParentheses": false,
+		"C_Cpp.files.exclude": {
+			"**/Binaries": true,
+			"**/Intermediate": true,
+			"**/Saved": true,
+			"**/DerivedDataCache": true,
+			"**/Plugins/**/Binaries": true,
+			"**/Plugins/**/Intermediate": true,
+			"**/Engine/Source/ThirdParty": true
 		}
-	},
-	"extensions": {
-		"recommendations": [
-			"ms-vscode.cpptools",
-			"ms-dotnettools.csharp"
-		]
 	},
 	"tasks": {
 		"version": "2.0.0",
