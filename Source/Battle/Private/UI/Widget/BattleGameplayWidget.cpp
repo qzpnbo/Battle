@@ -16,9 +16,6 @@ void UBattleGameplayWidget::NativeConstruct()
 	if (PlayerCharacter)
 	{
 		PlayerCharacter->OnHealthChanged.AddDynamic(this, &UBattleGameplayWidget::HandleHealthChanged);
-
-		// 初始化血条显示（使用角色当前血量）
-		UpdateHealthUI(PlayerCharacter->GetHealth(), PlayerCharacter->GetMaxHealth());
 	}
 }
 

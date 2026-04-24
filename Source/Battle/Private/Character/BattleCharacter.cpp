@@ -1,6 +1,8 @@
 // Fill out your copyright notice in the Description page of Project Settings.
 
 #include "Character/BattleCharacter.h"
+#include "Component/CombatComponent.h"
+#include "Types/BattleTypes.h"
 #include "EnhancedInputSubsystems.h"
 #include "EnhancedInputComponent.h"
 #include "InputActionValue.h"
@@ -8,6 +10,11 @@
 #include "Components/ProgressBar.h"
 #include "Components/CapsuleComponent.h"
 #include "Components/BoxComponent.h"
+#include "Components/StaticMeshComponent.h"
+#include "GameFramework/SpringArmComponent.h"
+#include "Camera/CameraComponent.h"
+#include "GameFramework/CharacterMovementComponent.h"
+#include "Sound/SoundBase.h"
 #include <Kismet/KismetMathLibrary.h>
 #include <Kismet/GameplayStatics.h>
 
@@ -37,18 +44,19 @@ ABattleCharacter::ABattleCharacter()
     SwordCollision->SetupAttachment(SwordMesh);
     SwordCollision->SetGenerateOverlapEvents(true);
 
-    // 初始化逻辑组件
     // 初始化逻辑组件（不需要SetupAttachment，因为不是SceneComponent）
     CombatComponent = CreateDefaultSubobject<UCombatComponent>(TEXT("CombatComponent"));
-    
-    // 记录原始最大移动速度
-    OriginalMaxWalkSpeed = GetCharacterMovement()->MaxWalkSpeed;
 }
 
 // Called when the game starts or when spawned
 void ABattleCharacter::BeginPlay()
 {
     Super::BeginPlay();
+
+	Health = MaxHealth;
+
+    // 广播初始血量，确保 UI 无论初始化时序如何都能显示正确值
+    OnHealthChanged.Broadcast(Health, MaxHealth);
 
     // 将武器碰撞体引用传递给战斗组件，并初始化 Overlap 回调
     if (CombatComponent && SwordCollision)
@@ -135,7 +143,8 @@ void ABattleCharacter::Look(const FInputActionValue &Value)
     // 检查战斗组件的目标锁定角色是否有效
     if (CombatComponent && IsValid(CombatComponent->TargetLockActor))
     {
-        // 锁定目标时不允许手动转镜头
+        // 锁定目标时不允许手动转镜头，但将水平输入用于目标切换
+        CombatComponent->HandleLockLookInput(LookAxisVector.X);
         return;
     }
 
@@ -167,6 +176,12 @@ void ABattleCharacter::Move(const FInputActionValue &Value)
 
 void ABattleCharacter::Jump()
 {
+    // 非 Idle 状态不允许跳跃（攻击中、翻滚中、受击硬直等）
+    if (CombatComponent && !CombatComponent->CanPerformAction())
+    {
+        return;
+    }
+
     Super::Jump();
 }
 
@@ -187,17 +202,44 @@ void ABattleCharacter::OnJumped_Implementation()
 
 void ABattleCharacter::LockTarget()
 {
-    CombatComponent->LockTarget();
+    if (CombatComponent)
+    {
+        CombatComponent->LockTarget();
+    }
 }
 
 void ABattleCharacter::Attack()
 {
+    if (!CombatComponent)
+    {
+        return;
+    }
+
+    // 检测Shift是否按下，按下则执行重攻击
+    APlayerController* PC = Cast<APlayerController>(GetController());
+    if (PC && PC->IsInputKeyDown(EKeys::LeftShift))
+    {
+        HeavyAttack();
+        return;
+    }
+
     CombatComponent->Attack();
+}
+
+void ABattleCharacter::HeavyAttack()
+{
+    if (CombatComponent)
+    {
+        CombatComponent->HeavyAttack();
+    }
 }
 
 void ABattleCharacter::Dodge()
 {
-    CombatComponent->Dodge();
+    if (CombatComponent)
+    {
+        CombatComponent->Dodge();
+    }
 }
 
 EMovementDirection ABattleCharacter::GetMovementDirection(const FInputActionValue &Value)
@@ -219,42 +261,49 @@ EMovementDirection ABattleCharacter::GetMovementDirection(const FInputActionValu
 
 float ABattleCharacter::TakeDamage(float DamageAmount, FDamageEvent const &DamageEvent, AController *EventInstigator, AActor *DamageCauser)
 {
+    // 已死亡则不再受伤
+    if (bIsDead)
+    {
+        return 0.0f;
+    }
+
+    // 通过战斗组件处理受击（检查无敌帧、中断当前动作、播放受击动画等）
+    // 传入 DamageCauser 用于计算受击方向，选择对应的方向性受击蒙太奇
+    // 如果处于无敌帧期间，HandleTakeDamage 返回 false，不扣血
+    if (CombatComponent && !CombatComponent->HandleTakeDamage(DamageCauser))
+    {
+        return 0.0f;
+    }
+
     float ActualDamage = Super::TakeDamage(DamageAmount, DamageEvent, EventInstigator, DamageCauser);
 
     Health = FMath::Clamp(Health - ActualDamage, 0.0f, MaxHealth);
     OnHealthChanged.Broadcast(Health, MaxHealth);
+
     if (Health <= 0.0f)
     {
         Die();
+        return ActualDamage;
     }
-
-    PlayAnimMontage(HitReactMontage, 1.0f);
-
-    // 临时减速
-    GetCharacterMovement()->MaxWalkSpeed = 0.0f;
-
-    // 清除旧定时器，重新计时（连续受击时只重置倒计时，不会记录错误的速度）
-    GetWorld()->GetTimerManager().ClearTimer(SpeedResetTimerHandle);
-    GetWorld()->GetTimerManager().SetTimer(
-        SpeedResetTimerHandle,
-        [this]()
-        {
-            if (GetCharacterMovement())
-            {
-                GetCharacterMovement()->MaxWalkSpeed = OriginalMaxWalkSpeed;
-            }
-        },
-        0.5f,
-        false
-    );
 
     return ActualDamage;
 }
 
 void ABattleCharacter::Die()
 {
-    // 清除减速恢复定时器，死亡后不再恢复速度
-    GetWorld()->GetTimerManager().ClearTimer(SpeedResetTimerHandle);
+    if (bIsDead)
+    {
+        return;
+    }
+
+    bIsDead = true;
+
+    // 通知战斗组件进入死亡状态
+    if (CombatComponent)
+    {
+        CombatComponent->SetCombatState(ECombatState::Dead);
+    }
+
     GetCharacterMovement()->DisableMovement();
     GetCapsuleComponent()->SetCollisionEnabled(ECollisionEnabled::NoCollision);
     GetMesh()->SetSimulatePhysics(true);

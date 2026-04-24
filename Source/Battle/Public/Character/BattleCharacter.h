@@ -4,27 +4,26 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Character.h"
-#include "Blueprint/UserWidget.h"
-#include "Component/CombatComponent.h"
-#include "GameFramework/SpringArmComponent.h"
-#include "Camera/CameraComponent.h"
-#include "Components/StaticMeshComponent.h"
-#include "Components/SceneComponent.h"
-#include "Components/ArrowComponent.h"
-#include "Components/BoxComponent.h"
-#include "Sound/SoundBase.h"
 #include "BattleCharacter.generated.h"
 
-// 定义一个动态多播委托，参数为当前生命值和最大生命值
-DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnHealthChanged, float, CurrentHealth, float, MaxHealth);
-
-// 预声明组件，减少头文件包含，加快编译速度
+// 前向声明（减少头文件包含，加快编译速度）
+class UUserWidget;
 class USpringArmComponent;
 class UCameraComponent;
+class UStaticMeshComponent;
+class USceneComponent;
+class UArrowComponent;
+class UBoxComponent;
+class USoundBase;
 class UInputMappingContext;
 class UInputAction;
 struct FInputActionValue;
 class UCombatComponent;
+enum class EMovementDirection : uint8;
+enum class ECombatState : uint8;
+
+// 定义一个动态多播委托，参数为当前生命值和最大生命值
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnHealthChanged, float, CurrentHealth, float, MaxHealth);
 
 UCLASS()
 class BATTLE_API ABattleCharacter : public ACharacter
@@ -56,11 +55,13 @@ public:
 
 protected:
     // 属性变量
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stats")
     float Health;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stats")
-    float MaxHealth;
+    float MaxHealth = 100.0f;
+
+    // 是否已死亡
+    bool bIsDead = false;
 
     // 战斗组件
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Logic")
@@ -102,17 +103,6 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
 	class UInputAction* IA_Dodge;
 
-	// 原始最大移动速度（BeginPlay 时记录）
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Movement")
-	float OriginalMaxWalkSpeed;
-
-	// 受击减速恢复定时器句柄
-	FTimerHandle SpeedResetTimerHandle;
-
-	// 蒙太奇动画
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Animation")
-	class UAnimMontage* HitReactMontage;
-
 	// 跳跃音效
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Sound")
 	USoundBase* JumpSound;
@@ -135,6 +125,9 @@ protected:
 
 	// 攻击输入处理（Attack Input）
 	void Attack();
+
+	// 重攻击输入处理（Heavy Attack Input）
+	void HeavyAttack();
 
 	// 翻滚输入处理（Dodge Input）
 	void Dodge();

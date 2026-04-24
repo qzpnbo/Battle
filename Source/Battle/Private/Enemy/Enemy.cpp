@@ -12,11 +12,8 @@
 // Sets default values
 AEnemy::AEnemy()
 {
-	// Set this character to call Tick() every frame.  You can turn this off to improve performance if you don't need it.
-	PrimaryActorTick.bCanEverTick = true;
-
-	MaxHealth = 100.0f;
-	CurrentHealth = MaxHealth;
+	// 敌人不需要每帧 Tick，关闭以提升性能
+	PrimaryActorTick.bCanEverTick = false;
 
 	// 创建头顶血条 Widget 组件
 	HealthWidgetComp = CreateDefaultSubobject<UWidgetComponent>(TEXT("HealthWidget"));
@@ -43,7 +40,7 @@ void AEnemy::BeginPlay()
 {
 	Super::BeginPlay();
 
-	CurrentHealth = MaxHealth;
+	Health = MaxHealth;
 
 	// 将武器碰撞体引用传递给战斗组件，并初始化 Overlap 回调
 	if (CombatComponent && SwordCollision)
@@ -60,38 +57,40 @@ void AEnemy::BeginPlay()
 	}
 }
 
-// Called every frame
+// 敌人不需要每帧 Tick，已关闭
 void AEnemy::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
 }
 
-// Called to bind functionality to input
-void AEnemy::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
-{
-	Super::SetupPlayerInputComponent(PlayerInputComponent);
-}
-
 float AEnemy::TakeDamage(float DamageAmount, FDamageEvent const& DamageEvent, AController* EventInstigator, AActor* DamageCauser)
 {
+	// 已死亡则不再受伤
+	if (bIsDead)
+	{
+		return 0.0f;
+	}
+
+	// 通过战斗组件处理受击（检查无敌帧、中断当前动作、播放受击动画等）
+	// 传入 DamageCauser 用于计算受击方向，选择对应的方向性受击蒙太奇
+	if (CombatComponent && !CombatComponent->HandleTakeDamage(DamageCauser))
+	{
+		return 0.0f;
+	}
+
 	float ActualDamage = Super::TakeDamage(DamageAmount, DamageEvent, EventInstigator, DamageCauser);
 
 	// 扣血
-	CurrentHealth = FMath::Clamp(CurrentHealth - ActualDamage, 0.0f, MaxHealth);
+	Health = FMath::Clamp(Health - ActualDamage, 0.0f, MaxHealth);
 
 	// 广播血量变化（更新头顶血条）
-	OnHealthChanged.Broadcast(CurrentHealth, MaxHealth);
-
-	// 播放受击动画
-	if (HitReactMontage)
-	{
-		PlayAnimMontage(HitReactMontage, 1.0f);
-	}
+	OnHealthChanged.Broadcast(Health, MaxHealth);
 
 	// 死亡判定
-	if (CurrentHealth <= 0.0f)
+	if (Health <= 0.0f)
 	{
 		Die();
+		return ActualDamage;
 	}
 
 	return ActualDamage;
@@ -99,7 +98,18 @@ float AEnemy::TakeDamage(float DamageAmount, FDamageEvent const& DamageEvent, AC
 
 void AEnemy::Die()
 {
+	if (bIsDead)
+	{
+		return;
+	}
+
 	bIsDead = true;
+
+	// 通知战斗组件进入死亡状态（清理锁定目标、定时器、停止Tick等）
+	if (CombatComponent)
+	{
+		CombatComponent->SetCombatState(ECombatState::Dead);
+	}
 
 	// 禁用移动
 	GetCharacterMovement()->DisableMovement();

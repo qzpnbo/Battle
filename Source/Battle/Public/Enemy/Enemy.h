@@ -32,7 +32,7 @@ public:
 	float MaxHealth = 100.0f;
 
 	UFUNCTION(BlueprintCallable, Category = "Stats")
-	float GetHealth() const { return CurrentHealth; }
+	float GetHealth() const { return Health; }
 
 	UFUNCTION(BlueprintCallable, Category = "Stats")
 	float GetMaxHealth() const { return MaxHealth; }
@@ -53,15 +53,11 @@ public:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Weapon")
 	UBoxComponent* SwordCollision;
 
-	// --- 动画 ---
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Animation")
-	class UAnimMontage* HitReactMontage;
-
 	// 受伤处理
 	virtual float TakeDamage(float DamageAmount, struct FDamageEvent const& DamageEvent, class AController* EventInstigator, AActor* DamageCauser) override;
 
 protected:
-	float CurrentHealth;
+	float Health;
 
 	// 是否已死亡
 	bool bIsDead = false;
@@ -75,7 +71,4 @@ protected:
 public:	
 	// Called every frame
 	virtual void Tick(float DeltaTime) override;
-
-	// Called to bind functionality to input
-	virtual void SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent) override;
 };

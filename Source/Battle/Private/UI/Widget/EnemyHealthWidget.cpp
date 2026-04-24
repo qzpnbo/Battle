@@ -15,8 +15,6 @@ void UEnemyHealthWidget::InitWithOwner(AEnemy* InOwner)
 
 	OwnerEnemy = InOwner;
 
-	UE_LOG(LogTemp, Warning, TEXT("[EnemyHealthWidget] 成功绑定到 Enemy: %s"), *InOwner->GetName());
-
 	// 绑定委托：血量变化时自动更新血条
 	InOwner->OnHealthChanged.AddDynamic(this, &UEnemyHealthWidget::HandleEnemyHealthChanged);
 
