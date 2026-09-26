@@ -50,8 +50,6 @@ void UCombatComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActo
 
     CheckTargetOcclusion();
 
-    CheckHeavyAttackAirborne(DeltaTime);
-
     UpdateAttackRotation(DeltaTime);
 
     UpdateAimPitch(DeltaTime);
@@ -199,7 +197,7 @@ void UCombatComponent::UnlockTarget()
             if (MoveComp)
             {
                 MoveComp->bOrientRotationToMovement = true;
-            }
+        }
         }
 
         if (IsValid(TargetLockWidget))
@@ -1101,55 +1099,56 @@ void UCombatComponent::OnAttackMontageEnded(UAnimMontage *Montage, bool bInterru
 
 // --- 重攻击系统 ---
 
-void UCombatComponent::HeavyAttack()
+float UCombatComponent::HeavyAttack()
 {
     // 只有 Idle 状态才允许重攻击，其他所有状态一律拒绝并尝试缓存输入
     if (CombatState != ECombatState::Idle)
     {
         BufferInput(EBufferedInputAction::HeavyAttack);
-        return;
+        return 0.0f;
     }
 
     // 跳跃中不允许重攻击
     ACharacter *OwnerChar = CachedOwnerCharacter.Get();
     if (OwnerChar && OwnerChar->GetCharacterMovement() && OwnerChar->GetCharacterMovement()->IsFalling())
     {
-        return;
+        return 0.0f;
     }
 
     if (!HeavyAttackMontage)
     {
-        return;
+        return 0.0f;
     }
 
     USkeletalMeshComponent *Mesh = CachedOwnerMesh.Get();
     if (!Mesh)
     {
-        return;
+        return 0.0f;
     }
 
     UAnimInstance *AnimInstance = Mesh->GetAnimInstance();
     if (!AnimInstance)
     {
-        return;
+        return 0.0f;
     }
 
     SetCombatState(ECombatState::HeavyAttacking);
-    bHeavyAttackLaunched = false;
 
     // 设置攻击初始朝向（以角色当前面朝方向出招）
     SetAttackRotation();
 
     // 先播放攻击蒙太奇
-    AnimInstance->Montage_Play(HeavyAttackMontage, 1.0f, EMontagePlayReturnType::MontageLength, 0.0f);
+    float Duration = AnimInstance->Montage_Play(HeavyAttackMontage, 1.0f, EMontagePlayReturnType::MontageLength, 0.0f);
 
     // 绑定重攻击蒙太奇结束回调
     FOnMontageEnded HeavyEndedDelegate;
     HeavyEndedDelegate.BindUObject(this, &UCombatComponent::OnHeavyAttackMontageEnded);
     AnimInstance->Montage_SetEndDelegate(HeavyEndedDelegate, HeavyAttackMontage);
 
-    // 绑定蒙太奇通知回调，用于在起跳帧触发 LaunchCharacter
+    // 绑定蒙太奇通知回调
     AnimInstance->OnPlayMontageNotifyBegin.AddDynamic(this, &UCombatComponent::OnHeavyAttackMontageNotifyBegin);
+
+    return Duration;
 }
 
 void UCombatComponent::OnHeavyAttackMontageEnded(UAnimMontage *Montage, bool bInterrupted)
@@ -1170,38 +1169,12 @@ void UCombatComponent::OnHeavyAttackMontageEnded(UAnimMontage *Montage, bool bIn
 
     // 重攻击结束，仅在状态仍为 HeavyAttacking 时重置
     // 避免覆盖更高优先级的状态（如受击硬直 Staggered）
-    bHeavyAttackLaunched = false;
     if (CombatState == ECombatState::HeavyAttacking)
     {
         SetCombatState(ECombatState::Idle);
         // 尝试执行跨动作类型的缓存输入
         ConsumeBufferedInput();
     }
-}
-
-void UCombatComponent::HeavyAttackLaunch()
-{
-    // 由蒙太奇通知 HeavyAttackLaunch 调用，给角色一个向上的冲量
-    // 这样角色会自然进入 Falling 状态，重力始终生效
-    if (CombatState != ECombatState::HeavyAttacking || bHeavyAttackLaunched)
-    {
-        return;
-    }
-
-    ACharacter *OwnerChar = CachedOwnerCharacter.Get();
-    if (!OwnerChar)
-    {
-        return;
-    }
-
-    bHeavyAttackLaunched = true;
-
-    // LaunchCharacter 会自动将角色从 Walking 切换到 Falling
-    // 重力始终生效，角色会自然抛物线运动
-    float LaunchForce = HeavyAttackLaunchForce;
-    OwnerChar->LaunchCharacter(FVector(0.0f, 0.0f, LaunchForce), false, true);
-
-    UE_LOG(LogTemp, Warning, TEXT("HeavyAttack Launch! Force: %.1f"), LaunchForce);
 }
 
 void UCombatComponent::OnHeavyAttackMontageNotifyBegin(FName NotifyName, const FBranchingPointNotifyPayload &BranchingPointPayload)
@@ -1211,81 +1184,6 @@ void UCombatComponent::OnHeavyAttackMontageNotifyBegin(FName NotifyName, const F
     {
         bCanBufferInput = true;
         return;
-    }
-
-    // 收到 HeavyAttackLaunch 通知时，触发起跳冲量
-    if (NotifyName == FName(TEXT("HeavyAttackLaunch")))
-    {
-        HeavyAttackLaunch();
-    }
-}
-
-void UCombatComponent::CheckHeavyAttackAirborne(float DeltaTime)
-{
-    // 仅在重攻击期间检测
-    if (CombatState != ECombatState::HeavyAttacking)
-    {
-        return;
-    }
-
-    ACharacter *OwnerChar = CachedOwnerCharacter.Get();
-    if (!OwnerChar || !OwnerChar->GetCharacterMovement())
-    {
-        return;
-    }
-
-    UCharacterMovementComponent *MoveComp = OwnerChar->GetCharacterMovement();
-
-    // 只在角色处于 Falling 状态时检测
-    if (!MoveComp->IsFalling())
-    {
-        return;
-    }
-
-    // 从角色脚底向下发射射线，检测到地面的实际距离
-    FVector CharLocation = OwnerChar->GetActorLocation();
-    // 获取胶囊体半高，射线从胶囊体底部开始
-    float CapsuleHalfHeight = OwnerChar->GetCapsuleComponent()->GetScaledCapsuleHalfHeight();
-    FVector TraceStart = CharLocation - FVector(0.0f, 0.0f, CapsuleHalfHeight);
-    FVector TraceEnd = TraceStart - FVector(0.0f, 0.0f, HeavyAttackTraceDistance);
-
-    FHitResult HitResult;
-    FCollisionQueryParams QueryParams;
-    QueryParams.AddIgnoredActor(OwnerChar);
-
-    bool bHitGround = GetWorld()->LineTraceSingleByChannel(
-        HitResult,
-        TraceStart,
-        TraceEnd,
-        ECC_Visibility,
-        QueryParams);
-
-    float DistanceToGround = 0.0f;
-    if (bHitGround)
-    {
-        // 射线命中地面，计算脚底到地面的距离
-        DistanceToGround = (TraceStart - HitResult.ImpactPoint).Size();
-    }
-    else
-    {
-        // 射线未命中任何物体，说明脚下很深（超过射线检测距离），视为悬空
-        DistanceToGround = HeavyAttackTraceDistance;
-    }
-
-    // 如果离地高度超过阈值，说明角色从悬崖边掉落，中断重攻击蒙太奇
-    float MaxAirborneHeight = HeavyAttackMaxAirborneHeight;
-    if (DistanceToGround > MaxAirborneHeight)
-    {
-        USkeletalMeshComponent *Mesh = CachedOwnerMesh.Get();
-        if (Mesh)
-        {
-            UAnimInstance *AnimInstance = Mesh->GetAnimInstance();
-            if (AnimInstance && HeavyAttackMontage)
-            {
-                AnimInstance->Montage_Stop(0.25f, HeavyAttackMontage);
-                UE_LOG(LogTemp, Warning, TEXT("HeavyAttack interrupted: too high above ground (%.1f cm)"), DistanceToGround);
-            }
-        }
     }
 }
 
@@ -1799,7 +1697,6 @@ void UCombatComponent::InterruptCurrentAction()
                 AnimInstance->Montage_Stop(0.15f, HeavyAttackMontage);
             }
         }
-        bHeavyAttackLaunched = false;
         AttackRotationElapsed = 0.0f;
         break;
 

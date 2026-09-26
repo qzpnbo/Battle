@@ -343,11 +343,7 @@ public:
 
     // 重攻击函数，由按住Shift+攻击键调用
     UFUNCTION(BlueprintCallable, Category = "Combat")
-    void HeavyAttack();
-
-    // 重攻击起跳冲量（由蒙太奇通知 HeavyAttackLaunch 触发）
-    UFUNCTION(BlueprintCallable, Category = "Combat")
-    void HeavyAttackLaunch();
+    float HeavyAttack();
 
     // 当前连击段索引（0=第一段, 1=第二段, 2=第三段）
     UPROPERTY(BlueprintReadWrite, Category = "Combat")
@@ -512,12 +508,6 @@ private:
 
     // 向下射线检测的最大距离（应大于 MaxAirborneHeight，确保能检测到地面）
     float HeavyAttackTraceDistance = 500.0f;
-
-    // 标记是否已经执行过起跳冲量（防止重复触发）
-    bool bHeavyAttackLaunched = false;
-
-    // 每帧检测重攻击期间的浮空状态
-    void CheckHeavyAttackAirborne(float DeltaTime);
 
 protected:
 	// Called when the game starts

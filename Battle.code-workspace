@@ -6,7 +6,7 @@
 		},
 		{
 			"name": "UE5",
-			"path": "E:\\Epic Games\\UE_5.5"
+			"path": "C:\\Program Files\\Epic Games\\UE_5.5"
 		}
 	],
 	"settings": {
@@ -71,13 +71,13 @@
 					"BattleEditor",
 					"Win64",
 					"Development",
-					"D:\\WorkSpace\\Unreal Projects\\Battle\\Battle.uproject",
+					"C:\\Workspace\\Battle\\Battle.uproject",
 					"-IgnoreJunk",
 				],
 				"problemMatcher": "$msCompile",
 				"type": "shell",
 				"options": {
-					"cwd": "E:\\Epic Games\\UE_5.5"
+					"cwd": "C:\\Program Files\\Epic Games\\UE_5.5"
 				}
 			}
 		]
