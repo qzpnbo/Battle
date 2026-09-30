@@ -3,30 +3,24 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "GameFramework/Character.h"
+#include "Character/BattleCharacterBase.h"
 #include "BattleCharacter.generated.h"
 
 // 前向声明（减少头文件包含，加快编译速度）
 class UUserWidget;
 class USpringArmComponent;
 class UCameraComponent;
-class UStaticMeshComponent;
-class USceneComponent;
-class UArrowComponent;
-class UBoxComponent;
 class USoundBase;
 class UInputMappingContext;
 class UInputAction;
 struct FInputActionValue;
-class UCombatComponent;
 enum class EMovementDirection : uint8;
-enum class ECombatState : uint8;
 
-// 定义一个动态多播委托，参数为当前生命值和最大生命值
-DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnHealthChanged, float, CurrentHealth, float, MaxHealth);
-
+/**
+ * 玩家角色：摄像机、输入处理、死亡后通知重生系统
+ */
 UCLASS()
-class BATTLE_API ABattleCharacter : public ACharacter
+class BATTLE_API ABattleCharacter : public ABattleCharacterBase
 {
 	GENERATED_BODY()
 
@@ -41,40 +35,15 @@ public:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Camera")
 	class UCameraComponent* FollowCamera;
 
-public:
-    // 委托实例（供 UI 等外部系统绑定）
-    UPROPERTY(BlueprintAssignable, Category = "Events")
-    FOnHealthChanged OnHealthChanged;
+	// 死亡界面类（为空时使用 C++ 默认的 UDeathScreenWidget）
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Death")
+	TSubclassOf<UUserWidget> DeathScreenWidgetClass;
 
-    // 血量访问函数
-    UFUNCTION(BlueprintCallable, Category = "Stats")
-    float GetHealth() const { return Health; }
-
-    UFUNCTION(BlueprintCallable, Category = "Stats")
-    float GetMaxHealth() const { return MaxHealth; }
+	// 死亡后多久重生（秒）
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Death", meta = (ClampMin = "0.5"))
+	float RespawnDelay = 4.0f;
 
 protected:
-    // 属性变量
-    float Health;
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stats")
-    float MaxHealth = 100.0f;
-
-    // 是否已死亡
-    bool bIsDead = false;
-
-    // 战斗组件
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Logic")
-	class UCombatComponent* CombatComponent;
-
-	// 武器网格体组件
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Weapon")
-	class UStaticMeshComponent* SwordMesh;
-
-	// 武器碰撞体组件（挂载在 SwordMesh 下，形状/大小可在蓝图中调整）
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Weapon")
-	class UBoxComponent* SwordCollision;
-
 	// Mapping Context
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
 	class UInputMappingContext* IMC_Default;
@@ -103,22 +72,31 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
 	class UInputAction* IA_Dodge;
 
+	// 格挡输入动作（可选）：为空时运行时自动创建，并默认映射到 鼠标右键 / 手柄 LB
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
+	class UInputAction* IA_Block;
+
 	// 跳跃音效
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Sound")
 	USoundBase* JumpSound;
 
-	// 保存创建出的HUD实例，方便后续操作
-	UPROPERTY()
-	UUserWidget* HUDWidgetInstance;
-
 	// Called when the game starts or when spawned
 	virtual void BeginPlay() override;
+
+	// 被控制器占有时添加输入映射（重生后新 Pawn 的 BeginPlay 早于 Possess，必须在这里添加）
+	virtual void NotifyControllerChanged() override;
+
+	// 失去控制器时移除本 Pawn 运行时创建的输入映射
+	virtual void UnPossessed() override;
 
 	// 视角输入处理（Camera Input）
 	void Look(const FInputActionValue& Value);
 
 	// 移动输入处理（Movement Input）
 	void Move(const FInputActionValue& Value);
+
+	// 移动输入结束（松开按键/摇杆回中），重置移动方向
+	void StopMove(const FInputActionValue& Value);
 
 	// 锁定敌人输入处理（Lock Input）
 	void LockTarget();
@@ -132,6 +110,10 @@ protected:
 	// 翻滚输入处理（Dodge Input）
 	void Dodge();
 
+	// 格挡输入处理（按下开始格挡，松开结束格挡）
+	void StartBlock();
+	void StopBlock();
+
 	// 根据输入值计算移动方向
 	EMovementDirection GetMovementDirection(const FInputActionValue& Value);
 
@@ -144,9 +126,6 @@ protected:
 	// 跳跃成功后的回调（播放音效）
 	virtual void OnJumped_Implementation() override;
 
-	// 死亡
-	void Die();
-
 public:	
 	// Called every frame
 	virtual void Tick(float DeltaTime) override;
@@ -154,6 +133,11 @@ public:
 	// Called to bind functionality to input
 	virtual void SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent) override;
 
-	virtual float TakeDamage(float DamageAmount, struct FDamageEvent const& DamageEvent, class AController* EventInstigator, AActor* DamageCauser) override;
+private:
+	// 将输入映射上下文添加到本地玩家
+	void AddInputMappingContexts();
 
+	// 运行时创建的输入映射上下文（仅包含格挡等未配置资产的输入）
+	UPROPERTY(Transient)
+	TObjectPtr<UInputMappingContext> RuntimeMappingContext;
 };

@@ -11,6 +11,9 @@
 class UStaticMeshComponent;
 class UBoxComponent;
 class UShapeComponent;
+class UAnimInstance;
+class USoundBase;
+class UAttributeComponent;
 
 #include "CombatComponent.generated.h"
 
@@ -107,14 +110,6 @@ public:
     // ============================================================================
     // 攻击数值配置
     // ============================================================================
-
-    // 重攻击起跳的垂直冲量大小
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Attack|HeavyAttack")
-    float HeavyAttackLaunchForce = 800.0f;
-
-    // 重攻击浮空高度检测阈值：超过此高度中断蒙太奇切换下落动画
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Attack|HeavyAttack")
-    float HeavyAttackMaxAirborneHeight = 300.0f;
 
     // 攻击开始后允许通过移动输入调整朝向的时间窗口（秒）
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Attack|Rotation")
@@ -231,6 +226,127 @@ public:
     float HeavyHitLagDuration = 0.12f;
 
     // ============================================================================
+    // 耐力消耗配置（数值存储在 UAttributeComponent，这里只定义各动作的消耗）
+    // ============================================================================
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stamina", meta = (ClampMin = "0.0"))
+    float LightAttackStaminaCost = 12.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stamina", meta = (ClampMin = "0.0"))
+    float HeavyAttackStaminaCost = 25.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stamina", meta = (ClampMin = "0.0"))
+    float FallingAttackStaminaCost = 18.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stamina", meta = (ClampMin = "0.0"))
+    float DodgeStaminaCost = 18.0f;
+
+    // 格挡时每点（格挡前）伤害消耗的耐力
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stamina", meta = (ClampMin = "0.0"))
+    float BlockStaminaCostPerDamage = 1.5f;
+
+    // 举盾格挡期间的耐力回复倍率
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stamina", meta = (ClampMin = "0.0", ClampMax = "1.0"))
+    float BlockStaminaRegenMultiplier = 0.3f;
+
+    // ============================================================================
+    // 韧性（削韧）配置
+    // ============================================================================
+
+    // 各攻击对目标造成的韧性伤害
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Poise", meta = (ClampMin = "0.0"))
+    float LightAttackPoiseDamage = 20.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Poise", meta = (ClampMin = "0.0"))
+    float HeavyAttackPoiseDamage = 45.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Poise", meta = (ClampMin = "0.0"))
+    float FallingAttackPoiseDamage = 35.0f;
+
+    // 自身出招期间受到的韧性伤害倍率（< 1 即"攻击霸体"，Boss 常用 0.3 左右）
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Poise", meta = (ClampMin = "0.0", ClampMax = "1.0"))
+    float AttackingPoiseDamageScale = 1.0f;
+
+    // ============================================================================
+    // 格挡 / 弹反配置
+    // ============================================================================
+
+    // 举盾循环蒙太奇（会自动把第一个 Section 设为循环，无需手动配置）
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Block")
+    UAnimMontage* BlockMontage = nullptr;
+
+    // 格挡住攻击时的受击反馈蒙太奇（可选）
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Block")
+    UAnimMontage* BlockReactMontage = nullptr;
+
+    // 耐力被打空破防时的蒙太奇（可选，为空时使用方向性受击蒙太奇）
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Block")
+    UAnimMontage* GuardBreakMontage = nullptr;
+
+    // 弹反成功时自身播放的蒙太奇（可选，为空时使用格挡反馈蒙太奇）
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Block|Parry")
+    UAnimMontage* ParryMontage = nullptr;
+
+    // 自己的攻击被弹反时播放的大硬直蒙太奇（可选，为空时使用前方受击蒙太奇）
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Block|Parry")
+    UAnimMontage* ParriedMontage = nullptr;
+
+    // 格挡减伤比例（0.9 = 只承受 10% 伤害）
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Block", meta = (ClampMin = "0.0", ClampMax = "1.0"))
+    float BlockDamageReduction = 0.9f;
+
+    // 可格挡的正面半角（度），来自身后/侧后方的攻击无法格挡
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Block", meta = (ClampMin = "0.0", ClampMax = "180.0"))
+    float BlockHalfAngle = 70.0f;
+
+    // 举盾期间的移动速度倍率
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Block", meta = (ClampMin = "0.0", ClampMax = "1.0"))
+    float BlockWalkSpeedMultiplier = 0.45f;
+
+    // 弹反窗口：按下格挡后多长时间内被击中判定为弹反（秒）
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Block|Parry", meta = (ClampMin = "0.0", ClampMax = "1.0"))
+    float ParryWindow = 0.2f;
+
+    // 被弹反硬直期间受到伤害的倍率（弹反后的反击加成）
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Block|Parry", meta = (ClampMin = "1.0"))
+    float ParriedDamageMultiplier = 2.0f;
+
+    // 弹反成功时的全局慢动作（仅玩家参与时触发）
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Block|Parry", meta = (ClampMin = "0.05", ClampMax = "1.0"))
+    float ParrySlowMoTimeDilation = 0.25f;
+
+    // 慢动作持续时间（真实时间，秒）
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Block|Parry", meta = (ClampMin = "0.0", ClampMax = "2.0"))
+    float ParrySlowMoDuration = 0.3f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Block")
+    USoundBase* BlockSound = nullptr;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Block|Parry")
+    USoundBase* ParrySound = nullptr;
+
+    // ============================================================================
+    // 动作速率（Boss 二阶段等场景下整体加快出招）
+    // ============================================================================
+
+    // 攻击类蒙太奇的播放速率倍率
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Attack", meta = (ClampMin = "0.1", ClampMax = "3.0"))
+    float ActionPlayRate = 1.0f;
+
+    // ============================================================================
+    // 阵营
+    // ============================================================================
+
+    // 所属阵营（由拥有者在构造函数中设置默认值，可在蓝图中覆盖）
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Team")
+    ECombatTeam Team = ECombatTeam::Neutral;
+
+    // 判断另一个 Actor 是否为敌对目标
+    // 没有 CombatComponent 的 Actor（如可破坏物）视为可被攻击；同阵营互不敌对
+    UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Team")
+    bool IsHostileTo(const AActor* Other) const;
+
+    // ============================================================================
     // 目标锁定系统
     // ============================================================================
 
@@ -261,11 +377,46 @@ public:
     // 受击硬直系统
     // ============================================================================
 
-    // 处理受击逻辑（由角色类的 TakeDamage 调用）
-    // @param DamageCauser 造成伤害的 Actor（用于计算受击方向）
-    // 返回 true 表示正常受击，返回 false 表示无敌帧期间免疫伤害
+    // 受击判定（由角色 TakeDamage 调用），按优先级依次判断：
+    //   死亡 → 无敌帧 → 被弹反增伤 → 格挡（弹反窗口 / 减伤 / 破防）→ 韧性（破韧才硬直）
+    // 会就地修改 Hit.Damage（格挡减伤、被弹反增伤），并负责播放对应的受击/格挡动画
+    EHitResponse ResolveIncomingHit(FIncomingHit& Hit, AActor* DamageCauser);
+
+    // 自己的攻击被对方弹反：中断动作，进入大硬直，期间受到的伤害提高
     UFUNCTION(BlueprintCallable, Category = "Combat")
-    bool HandleTakeDamage(AActor* DamageCauser = nullptr);
+    void ReceiveParried(AActor* Parrier);
+
+    // 是否处于被弹反后的硬直中
+    UFUNCTION(BlueprintPure, Category = "Combat")
+    bool IsParryStunned() const { return bIsParryStunned; }
+
+    // ============================================================================
+    // 格挡系统
+    // ============================================================================
+
+    // 按下格挡键（Idle 时立即举盾；攻击/翻滚结束后若仍按住会自动举盾）
+    UFUNCTION(BlueprintCallable, Category = "Block")
+    void StartBlock();
+
+    // 松开格挡键
+    UFUNCTION(BlueprintCallable, Category = "Block")
+    void StopBlock();
+
+    UFUNCTION(BlueprintPure, Category = "Block")
+    bool IsBlocking() const { return CombatState == ECombatState::Blocking; }
+
+    // ============================================================================
+    // AI / 特殊动作接口
+    // ============================================================================
+
+    // 播放任意攻击蒙太奇（Boss 招式等），伤害/削韧/可否弹反由参数指定
+    // @return 是否成功开始（非 Idle 或空中时失败）
+    UFUNCTION(BlueprintCallable, Category = "Combat")
+    bool PerformAttackMontage(UAnimMontage* Montage, float DamageMultiplier = 1.0f, float PoiseDamage = 30.0f, bool bCanBeParried = true);
+
+    // 强制播放特殊动作（打断当前动作，如 Boss 转阶段咆哮），可选全程无敌
+    UFUNCTION(BlueprintCallable, Category = "Combat")
+    bool PlayForcedActionMontage(UAnimMontage* Montage, bool bInvincibleDuringAction = true);
 
     // ============================================================================
     // 战斗状态管理
@@ -329,9 +480,25 @@ public:
     UPROPERTY(BlueprintReadWrite, Category = "Movement")
     EMovementDirection MovementDirection = EMovementDirection::Forward;
 
+    // 当前是否有移动输入（松开摇杆/按键时为 false，此时翻滚为原地后撤步）
+    UPROPERTY(BlueprintReadOnly, Category = "Movement")
+    bool bHasMovementInput = false;
+
     // 设置移动方向（供角色调用，保持组件与角色解耦）
     UFUNCTION(BlueprintCallable, Category = "Movement")
-    void SetMovementDirection(EMovementDirection NewDirection) { MovementDirection = NewDirection; }
+    void SetMovementDirection(EMovementDirection NewDirection)
+    {
+        MovementDirection = NewDirection;
+        bHasMovementInput = true;
+    }
+
+    // 清除移动输入（由角色在移动输入结束时调用）
+    UFUNCTION(BlueprintCallable, Category = "Movement")
+    void ClearMovementInput()
+    {
+        bHasMovementInput = false;
+        MovementDirection = EMovementDirection::Backward;
+    }
 
     // ============================================================================
     // 攻击系统
@@ -421,8 +588,7 @@ public:
     // 命中反馈：触发 Hit Lag 和镜头震动
     void ApplyHitFeedback();
 
-    // Hit Lag 定时器句柄
-    // Hit Lag 定时器句柄（使用真实时间定时器，不受全局时间膨胀影响）
+    // Hit Lag 定时器句柄（普通游戏时间定时器，本项目未使用全局时间膨胀）
     FTimerHandle HitLagTimerHandle;
 
     // 应用 Hit Lag（降低攻击者蒙太奇播放速率）
@@ -462,7 +628,7 @@ private:
     // 尝试设置连击的 NextSection 链接（在 ComboWindow 期间调用）
     void TrySetComboNextSection();
 
-    // 重攻击蒙太奇通知回调，用于触发起跳冲量
+    // 重攻击蒙太奇通知回调，用于开启预输入窗口
     UFUNCTION()
     void OnHeavyAttackMontageNotifyBegin(FName NotifyName, const FBranchingPointNotifyPayload& BranchingPointPayload);
 
@@ -506,12 +672,115 @@ private:
     // 攻击朝向调整已经过的时间（超过窗口时长后停止调整）
     float AttackRotationElapsed = 0.0f;
 
-    // 向下射线检测的最大距离（应大于 MaxAirborneHeight，确保能检测到地面）
-    float HeavyAttackTraceDistance = 500.0f;
+    // 当前正在播放的翻滚蒙太奇（四方向之一，用于通知过滤与精确停止）
+    UPROPERTY()
+    TObjectPtr<UAnimMontage> CurrentDodgeMontage = nullptr;
+
+    // 是否处于锁定状态（独立于 TargetLockActor，目标被销毁/GC 置空后仍能正确执行解锁清理）
+    bool bIsTargetLocked = false;
+
+    // 在 [-1, 1] 内安全计算两个单位向量的夹角（度），避免浮点误差导致 Acos 返回 NaN
+    static float SafeAngleDegrees(const FVector& A, const FVector& B);
+
+    // ---------------------------------------------------------------------------
+    // 状态流转辅助
+    // ---------------------------------------------------------------------------
+
+    // 动作结束统一出口：回到 Idle → 执行预输入 → 若仍按住格挡则自动举盾
+    void ReturnToIdle();
+
+    // 播放硬直类蒙太奇（受击 / 破防 / 被弹反），结束后自动回到 Idle
+    void PlayStaggerMontage(UAnimMontage* Montage);
+
+    // 当前播放中的硬直蒙太奇（用于过滤连续受击时旧实例的结束回调）
+    UPROPERTY()
+    TObjectPtr<UAnimMontage> CurrentStaggerMontage = nullptr;
+
+    // 当前攻击的规格（开始攻击时写入，命中时读取）
+    float CurrentAttackDamageMultiplier = 1.0f;
+    float CurrentAttackPoiseDamage = 0.0f;
+    bool bCurrentAttackCanBeParried = true;
+    void SetCurrentAttackSpec(float DamageMultiplier, float PoiseDamage, bool bCanBeParried);
+
+    // 当前播放中的特殊动作蒙太奇（PerformAttackMontage / PlayForcedActionMontage）
+    UPROPERTY()
+    TObjectPtr<UAnimMontage> CurrentSpecialMontage = nullptr;
+
+    // 特殊动作是否开启了全程无敌（结束时需要关闭）
+    bool bSpecialActionInvincible = false;
+
+    UFUNCTION()
+    void OnSpecialMontageEnded(UAnimMontage* Montage, bool bInterrupted);
+
+    // 获取拥有者的 AnimInstance（失败返回 nullptr）
+    UAnimInstance* GetOwnerAnimInstance() const;
+
+    // ---------------------------------------------------------------------------
+    // 耐力
+    // ---------------------------------------------------------------------------
+
+    UPROPERTY()
+    TWeakObjectPtr<UAttributeComponent> CachedAttributes;
+
+    // 是否有耐力发动动作（未挂属性组件或未启用耐力时总是 true）
+    bool HasStaminaForAction() const;
+
+    // 消耗耐力（前置条件：HasStaminaForAction 已通过）
+    void ConsumeStamina(float Cost);
+
+    // 根据状态切换更新耐力回复（出招时暂停、格挡时减缓）与格挡移速
+    void OnCombatStateTransition(ECombatState OldState, ECombatState NewState);
+
+    // ---------------------------------------------------------------------------
+    // 格挡 / 弹反
+    // ---------------------------------------------------------------------------
+
+    // 格挡键是否按住（动作结束后用于自动恢复举盾）
+    bool bBlockInputHeld = false;
+
+    // 本次举盾开始时间（用于弹反窗口判定）
+    float BlockStartTime = -1000.0f;
+
+    // 进入格挡前的移动速度（退出时恢复）
+    float SavedMaxWalkSpeed = 0.0f;
+
+    // 是否处于被弹反的硬直中
+    bool bIsParryStunned = false;
+
+    void EnterBlock();
+
+    // 离开格挡（停止举盾动画）；bReturnToIdle=false 时由调用方负责设置后续状态
+    void ExitBlock(bool bReturnToIdle);
+
+    // 播放举盾循环
+    void PlayBlockLoop();
+
+    // 格挡中播放一次性反馈蒙太奇（格挡受击 / 弹反成功），结束后回到举盾循环
+    void PlayBlockReaction(UAnimMontage* Montage);
+
+    UFUNCTION()
+    void OnBlockReactionMontageEnded(UAnimMontage* Montage, bool bInterrupted);
+
+    // 攻击者是否在自己的格挡角度内
+    bool IsAttackerInBlockArc(const AActor* Attacker) const;
+
+    // 弹反成功：让攻击者进入被弹反硬直，并播放反馈（慢动作、音效、镜头震动）
+    void HandleParrySuccess(AActor* Attacker);
+
+    // 弹反慢动作
+    FTimerHandle ParrySlowMoTimerHandle;
+    bool bParrySlowMoActive = false;
+    void StartParrySlowMo();
+    void StopParrySlowMo();
+
+    // 在自身位置播放音效
+    void PlayCombatSound(USoundBase* Sound) const;
 
 protected:
 	// Called when the game starts
 	virtual void BeginPlay() override;
+
+	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
 public:	
 	// Called every frame

@@ -3,19 +3,16 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "GameFramework/Character.h"
+#include "Character/BattleCharacterBase.h"
 #include "Enemy.generated.h"
 
 class UWidgetComponent;
-class UStaticMeshComponent;
-class UBoxComponent;
-class UCombatComponent;
 
-// 敌人血量变化委托（供血条 Widget 绑定）
-DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnEnemyHealthChanged, float, CurrentHealth, float, MaxHealth);
-
+/**
+ * 普通敌人：头顶血条、死亡时停止 AI、尸体延迟销毁，并注册到重生系统（玩家死亡后重置）
+ */
 UCLASS()
-class BATTLE_API AEnemy : public ACharacter
+class BATTLE_API AEnemy : public ABattleCharacterBase
 {
 	GENERATED_BODY()
 
@@ -27,48 +24,17 @@ public:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "UI")
 	class UWidgetComponent* HealthWidgetComp;
 
-	// --- 血量系统 ---
+	// 死亡后尸体保留时间（秒），到时自动销毁；<= 0 表示永久保留
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stats")
-	float MaxHealth = 100.0f;
+	float CorpseLifeSpan = 10.0f;
 
-	UFUNCTION(BlueprintCallable, Category = "Stats")
-	float GetHealth() const { return Health; }
-
-	UFUNCTION(BlueprintCallable, Category = "Stats")
-	float GetMaxHealth() const { return MaxHealth; }
-
-	// 血量变化委托
-	UPROPERTY(BlueprintAssignable, Category = "Events")
-	FOnEnemyHealthChanged OnHealthChanged;
-
-	// --- 战斗组件 ---
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Logic")
-	UCombatComponent* CombatComponent;
-
-	// --- 武器组件 ---
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Weapon")
-	UStaticMeshComponent* SwordMesh;
-
-	// 武器碰撞体组件（挂载在 SwordMesh 下，形状/大小可在蓝图中调整）
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Weapon")
-	UBoxComponent* SwordCollision;
-
-	// 受伤处理
-	virtual float TakeDamage(float DamageAmount, struct FDamageEvent const& DamageEvent, class AController* EventInstigator, AActor* DamageCauser) override;
+	// 玩家死亡重生时，已被击杀的该敌人是否复活（普通敌人复活，Boss 击杀后永久死亡）
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Respawn")
+	bool bRespawnAfterDeath = true;
 
 protected:
-	float Health;
-
-	// 是否已死亡
-	bool bIsDead = false;
-
 	// Called when the game starts or when spawned
 	virtual void BeginPlay() override;
 
-	// 死亡处理
-	void Die();
-
-public:	
-	// Called every frame
-	virtual void Tick(float DeltaTime) override;
+	virtual void Die(AActor* Killer) override;
 };

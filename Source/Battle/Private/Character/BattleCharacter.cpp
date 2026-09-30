@@ -2,18 +2,16 @@
 
 #include "Character/BattleCharacter.h"
 #include "Component/CombatComponent.h"
+#include "Game/BattleRespawnSubsystem.h"
 #include "Types/BattleTypes.h"
 #include "EnhancedInputSubsystems.h"
 #include "EnhancedInputComponent.h"
 #include "InputActionValue.h"
+#include "InputAction.h"
+#include "InputMappingContext.h"
 #include "Blueprint/UserWidget.h"
-#include "Components/ProgressBar.h"
-#include "Components/CapsuleComponent.h"
-#include "Components/BoxComponent.h"
-#include "Components/StaticMeshComponent.h"
 #include "GameFramework/SpringArmComponent.h"
 #include "Camera/CameraComponent.h"
-#include "GameFramework/CharacterMovementComponent.h"
 #include "Sound/SoundBase.h"
 #include <Kismet/KismetMathLibrary.h>
 #include <Kismet/GameplayStatics.h>
@@ -21,7 +19,7 @@
 // Sets default values
 ABattleCharacter::ABattleCharacter()
 {
-    // Set this character to call Tick() every frame.  You can turn this off to improve performance if you don't need it.
+    // 保留 Tick：BP_BattleCharacter 中使用了 Event Tick
     PrimaryActorTick.bCanEverTick = true;
 
     // 设置CameraBoom，挂载到根组件
@@ -35,17 +33,7 @@ ABattleCharacter::ABattleCharacter()
     FollowCamera->SetupAttachment(CameraBoom, USpringArmComponent::SocketName);
     FollowCamera->bUsePawnControlRotation = false; // 不让相机跟随角色旋转
 
-    // 设置武器，挂载到Mesh
-    SwordMesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("SwordMesh"));
-    SwordMesh->SetupAttachment(GetMesh(), FName(TEXT("hand_r_Socket"))); // 绑定到骨骼插槽
-
-    // 创建武器碰撞体，挂载到 SwordMesh 下（形状/大小可在蓝图中可视化调整）
-    SwordCollision = CreateDefaultSubobject<UBoxComponent>(TEXT("SwordCollision"));
-    SwordCollision->SetupAttachment(SwordMesh);
-    SwordCollision->SetGenerateOverlapEvents(true);
-
-    // 初始化逻辑组件（不需要SetupAttachment，因为不是SceneComponent）
-    CombatComponent = CreateDefaultSubobject<UCombatComponent>(TEXT("CombatComponent"));
+    CombatComponent->Team = ECombatTeam::Player;
 }
 
 // Called when the game starts or when spawned
@@ -53,28 +41,61 @@ void ABattleCharacter::BeginPlay()
 {
     Super::BeginPlay();
 
-	Health = MaxHealth;
+    AddInputMappingContexts();
 
-    // 广播初始血量，确保 UI 无论初始化时序如何都能显示正确值
-    OnHealthChanged.Broadcast(Health, MaxHealth);
-
-    // 将武器碰撞体引用传递给战斗组件，并初始化 Overlap 回调
-    if (CombatComponent && SwordCollision)
+    // 注册到重生系统（监听死亡 → 显示死亡界面 → 在检查点重生）
+    if (UBattleRespawnSubsystem* RespawnSubsystem = GetWorld()->GetSubsystem<UBattleRespawnSubsystem>())
     {
-        CombatComponent->SwordCollisionRef = SwordCollision;
-        CombatComponent->InitSwordCollision();
+        RespawnSubsystem->RegisterPlayer(this);
     }
+}
 
-    if (APlayerController *PC = Cast<APlayerController>(GetController()))
+void ABattleCharacter::NotifyControllerChanged()
+{
+    Super::NotifyControllerChanged();
+    AddInputMappingContexts();
+}
+
+void ABattleCharacter::UnPossessed()
+{
+    // 必须在 Super 之前处理：Super::UnPossessed 会把 Controller 置空
+    if (APlayerController* PC = Cast<APlayerController>(GetController()))
     {
-        // 增强输入映射
-        if (IMC_Default)
+        if (UEnhancedInputLocalPlayerSubsystem* Subsystem = ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(PC->GetLocalPlayer()))
         {
-            if (UEnhancedInputLocalPlayerSubsystem *Subsystem = ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(PC->GetLocalPlayer()))
+            if (RuntimeMappingContext)
             {
-                Subsystem->AddMappingContext(IMC_Default, 0);
+                Subsystem->RemoveMappingContext(RuntimeMappingContext);
             }
         }
+    }
+
+    Super::UnPossessed();
+}
+
+void ABattleCharacter::AddInputMappingContexts()
+{
+    APlayerController* PC = Cast<APlayerController>(GetController());
+    if (!PC)
+    {
+        return;
+    }
+
+    UEnhancedInputLocalPlayerSubsystem* Subsystem = ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(PC->GetLocalPlayer());
+    if (!Subsystem)
+    {
+        return;
+    }
+
+    // 重复添加同一个 Context 只会更新优先级，不会产生重复映射
+    if (IMC_Default)
+    {
+        Subsystem->AddMappingContext(IMC_Default, 0);
+    }
+
+    if (RuntimeMappingContext)
+    {
+        Subsystem->AddMappingContext(RuntimeMappingContext, 1);
     }
 }
 
@@ -89,8 +110,8 @@ void ABattleCharacter::SetupPlayerInputComponent(UInputComponent *PlayerInputCom
 {
     Super::SetupPlayerInputComponent(PlayerInputComponent);
 
-    // 绑定增强输入动作
-    if (UEnhancedInputComponent *EnhancedInput = CastChecked<UEnhancedInputComponent>(PlayerInputComponent))
+    // 绑定增强输入动作（Cast 失败时安全跳过，不再 CastChecked 后又判空）
+    if (UEnhancedInputComponent *EnhancedInput = Cast<UEnhancedInputComponent>(PlayerInputComponent))
     {
         // 视角输入
         if (IA_Look)
@@ -102,6 +123,8 @@ void ABattleCharacter::SetupPlayerInputComponent(UInputComponent *PlayerInputCom
         if (IA_Move)
         {
             EnhancedInput->BindAction(IA_Move, ETriggerEvent::Triggered, this, &ABattleCharacter::Move);
+            // 松开移动输入时重置方向，避免锁定状态下用"上一次的方向"翻滚
+            EnhancedInput->BindAction(IA_Move, ETriggerEvent::Completed, this, &ABattleCharacter::StopMove);
         }
 
         // 跳跃输入
@@ -131,6 +154,14 @@ void ABattleCharacter::SetupPlayerInputComponent(UInputComponent *PlayerInputCom
         if (IA_Dodge)
         {
             EnhancedInput->BindAction(IA_Dodge, ETriggerEvent::Started, this, &ABattleCharacter::Dodge);
+        }
+
+        // 格挡输入：按下开始、松开（或被取消）结束
+        if (IA_Block)
+        {
+            EnhancedInput->BindAction(IA_Block, ETriggerEvent::Started, this, &ABattleCharacter::StartBlock);
+            EnhancedInput->BindAction(IA_Block, ETriggerEvent::Completed, this, &ABattleCharacter::StopBlock);
+            EnhancedInput->BindAction(IA_Block, ETriggerEvent::Canceled, this, &ABattleCharacter::StopBlock);
         }
     }
 }
@@ -174,9 +205,17 @@ void ABattleCharacter::Move(const FInputActionValue &Value)
     AddMovementInput(ForwardDirection, Value.Get<FVector2D>().Y);
 }
 
+void ABattleCharacter::StopMove(const FInputActionValue &Value)
+{
+    if (CombatComponent)
+    {
+        CombatComponent->ClearMovementInput();
+    }
+}
+
 void ABattleCharacter::Jump()
 {
-    // 非 Idle 状态不允许跳跃（攻击中、翻滚中、受击硬直等）
+    // 非 Idle 状态不允许跳跃（攻击中、翻滚中、受击硬直、格挡中等）
     if (CombatComponent && !CombatComponent->CanPerformAction())
     {
         return;
@@ -242,6 +281,22 @@ void ABattleCharacter::Dodge()
     }
 }
 
+void ABattleCharacter::StartBlock()
+{
+    if (CombatComponent)
+    {
+        CombatComponent->StartBlock();
+    }
+}
+
+void ABattleCharacter::StopBlock()
+{
+    if (CombatComponent)
+    {
+        CombatComponent->StopBlock();
+    }
+}
+
 EMovementDirection ABattleCharacter::GetMovementDirection(const FInputActionValue &Value)
 {
     FVector2D MoveVector = Value.Get<FVector2D>();
@@ -257,54 +312,4 @@ EMovementDirection ABattleCharacter::GetMovementDirection(const FInputActionValu
         // 左右为主
         return MoveVector.X >= 0.0f ? EMovementDirection::Right : EMovementDirection::Left;
     }
-}
-
-float ABattleCharacter::TakeDamage(float DamageAmount, FDamageEvent const &DamageEvent, AController *EventInstigator, AActor *DamageCauser)
-{
-    // 已死亡则不再受伤
-    if (bIsDead)
-    {
-        return 0.0f;
-    }
-
-    // 通过战斗组件处理受击（检查无敌帧、中断当前动作、播放受击动画等）
-    // 传入 DamageCauser 用于计算受击方向，选择对应的方向性受击蒙太奇
-    // 如果处于无敌帧期间，HandleTakeDamage 返回 false，不扣血
-    if (CombatComponent && !CombatComponent->HandleTakeDamage(DamageCauser))
-    {
-        return 0.0f;
-    }
-
-    float ActualDamage = Super::TakeDamage(DamageAmount, DamageEvent, EventInstigator, DamageCauser);
-
-    Health = FMath::Clamp(Health - ActualDamage, 0.0f, MaxHealth);
-    OnHealthChanged.Broadcast(Health, MaxHealth);
-
-    if (Health <= 0.0f)
-    {
-        Die();
-        return ActualDamage;
-    }
-
-    return ActualDamage;
-}
-
-void ABattleCharacter::Die()
-{
-    if (bIsDead)
-    {
-        return;
-    }
-
-    bIsDead = true;
-
-    // 通知战斗组件进入死亡状态
-    if (CombatComponent)
-    {
-        CombatComponent->SetCombatState(ECombatState::Dead);
-    }
-
-    GetCharacterMovement()->DisableMovement();
-    GetCapsuleComponent()->SetCollisionEnabled(ECollisionEnabled::NoCollision);
-    GetMesh()->SetSimulatePhysics(true);
 }

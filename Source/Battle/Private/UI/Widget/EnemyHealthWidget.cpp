@@ -4,19 +4,20 @@
 #include "Components/ProgressBar.h"
 #include "Components/TextBlock.h"
 #include "Enemy/Enemy.h"
+#include "Component/AttributeComponent.h"
 
 void UEnemyHealthWidget::InitWithOwner(AEnemy* InOwner)
 {
-	if (!InOwner)
+	if (!InOwner || !InOwner->AttributeComponent)
 	{
-		UE_LOG(LogTemp, Error, TEXT("[EnemyHealthWidget] InitWithOwner: InOwner 为空！"));
+		UE_LOG(LogTemp, Error, TEXT("[EnemyHealthWidget] InitWithOwner: InOwner 或其 AttributeComponent 为空！"));
 		return;
 	}
 
 	OwnerEnemy = InOwner;
 
 	// 绑定委托：血量变化时自动更新血条
-	InOwner->OnHealthChanged.AddDynamic(this, &UEnemyHealthWidget::HandleEnemyHealthChanged);
+	InOwner->AttributeComponent->OnHealthChanged.AddUniqueDynamic(this, &UEnemyHealthWidget::HandleEnemyHealthChanged);
 
 	// 初始化血条显示
 	UpdateHealthUI(InOwner->GetHealth(), InOwner->GetMaxHealth());

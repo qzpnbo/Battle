@@ -8,7 +8,11 @@ void ABattleHUD::BeginPlay()
 
     if (GameplayWidgetClass)
     {
-        GameplayWidgetInstance = CreateWidget<UUserWidget>(GetWorld(), GameplayWidgetClass);
+        // 以玩家控制器为 Owner 创建，Widget 内可通过 GetOwningPlayer 监听 Pawn 切换（重生后自动重新绑定）
+        APlayerController* OwningPC = GetOwningPlayerController();
+        GameplayWidgetInstance = OwningPC
+            ? CreateWidget<UUserWidget>(OwningPC, GameplayWidgetClass)
+            : CreateWidget<UUserWidget>(GetWorld(), GameplayWidgetClass);
         if (GameplayWidgetInstance)
         {
             GameplayWidgetInstance->AddToViewport();
