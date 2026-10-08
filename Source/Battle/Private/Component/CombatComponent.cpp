@@ -1983,13 +1983,6 @@ void UCombatComponent::PlayBlockLoop()
 
     AnimInstance->Montage_Play(BlockMontage, 1.0f, EMontagePlayReturnType::MontageLength, 0.0f);
 
-    // 举盾循环不使用根运动：动画序列若勾选了 Enable Root Motion，播放期间 CharacterMovement 会改用
-    // 动画位移（原地动画 ≈ 0）而忽略移动输入，导致举盾时无法走动。只对本次播放的实例禁用，不修改资产
-    if (FAnimMontageInstance *BlockInstance = AnimInstance->GetActiveInstanceForMontage(BlockMontage))
-    {
-        BlockInstance->PushDisableRootMotion();
-    }
-
     // 把第一个 Section 的下一段设为自己 → 无限循环，直到 ExitBlock 主动停止
     if (BlockMontage->CompositeSections.Num() > 0)
     {
