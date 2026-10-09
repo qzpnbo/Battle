@@ -86,9 +86,6 @@ protected:
 	// 被控制器占有时添加输入映射（重生后新 Pawn 的 BeginPlay 早于 Possess，必须在这里添加）
 	virtual void NotifyControllerChanged() override;
 
-	// 失去控制器时移除本 Pawn 运行时创建的输入映射
-	virtual void UnPossessed() override;
-
 	// 视角输入处理（Camera Input）
 	void Look(const FInputActionValue& Value);
 

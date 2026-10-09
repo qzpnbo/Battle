@@ -56,23 +56,6 @@ void ABattleCharacter::NotifyControllerChanged()
     AddInputMappingContexts();
 }
 
-void ABattleCharacter::UnPossessed()
-{
-    // 必须在 Super 之前处理：Super::UnPossessed 会把 Controller 置空
-    if (APlayerController* PC = Cast<APlayerController>(GetController()))
-    {
-        if (UEnhancedInputLocalPlayerSubsystem* Subsystem = ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(PC->GetLocalPlayer()))
-        {
-            if (RuntimeMappingContext)
-            {
-                Subsystem->RemoveMappingContext(RuntimeMappingContext);
-            }
-        }
-    }
-
-    Super::UnPossessed();
-}
-
 void ABattleCharacter::AddInputMappingContexts()
 {
     APlayerController* PC = Cast<APlayerController>(GetController());
@@ -91,11 +74,6 @@ void ABattleCharacter::AddInputMappingContexts()
     if (IMC_Default)
     {
         Subsystem->AddMappingContext(IMC_Default, 0);
-    }
-
-    if (RuntimeMappingContext)
-    {
-        Subsystem->AddMappingContext(RuntimeMappingContext, 1);
     }
 }
 

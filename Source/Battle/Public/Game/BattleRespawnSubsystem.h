@@ -12,7 +12,7 @@ class ABattleCharacterBase;
 class ACheckpoint;
 class UUserWidget;
 
-// 敌人出生记录（USTRUCT + UPROPERTY：保证敌人类在所有实例销毁后仍被 GC 引用）
+// 敌人出生记录
 USTRUCT()
 struct FEnemySpawnRecord
 {

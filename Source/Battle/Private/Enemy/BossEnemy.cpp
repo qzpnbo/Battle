@@ -8,6 +8,7 @@
 #include "GameFramework/CharacterMovementComponent.h"
 #include "Kismet/GameplayStatics.h"
 #include "TimerManager.h"
+#include "Game/BattleBGMSubsystem.h"
 
 ABossEnemy::ABossEnemy()
 {
@@ -87,6 +88,8 @@ void ABossEnemy::StartBossFight()
 		BossHealthWidget->InitWithBoss(this);
 		BossHealthWidget->AddToViewport(5);
 	}
+
+	GetWorld()->GetSubsystem<UBattleBGMSubsystem>()->PlayBossBGM();
 }
 
 void ABossEnemy::HandleHealthChanged(float CurrentHealth, float MaxHealth)
@@ -147,6 +150,9 @@ void ABossEnemy::Die(AActor* Killer)
 	{
 		GetWorldTimerManager().SetTimer(RemoveBarTimerHandle, this, &ABossEnemy::RemoveHealthBar, FMath::Max(HealthBarLingerTime, 0.01f), false);
 	}
+
+	// 切回探索音乐
+	GetWorld()->GetSubsystem<UBattleBGMSubsystem>()->PlayExplorationBGM();
 }
 
 void ABossEnemy::RemoveHealthBar()

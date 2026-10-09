@@ -54,6 +54,7 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Attributes|Health")
 	float ApplyHealthDamage(float Amount);
 
+	// 治疗
 	UFUNCTION(BlueprintCallable, Category = "Attributes|Health")
 	void Heal(float Amount);
 

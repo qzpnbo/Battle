@@ -10,6 +10,7 @@
 #include "GameFramework/PlayerController.h"
 #include "Engine/World.h"
 #include "TimerManager.h"
+#include <Game/BattleBGMSubsystem.h>
 
 bool UBattleRespawnSubsystem::DoesSupportWorldType(const EWorldType::Type WorldType) const
 {
@@ -122,7 +123,11 @@ void UBattleRespawnSubsystem::HandlePlayerDied(ABattleCharacterBase* DeadCharact
 		DeathScreen->AddToViewport(100);
 	}
 
+	// 重生倒计时
 	World->GetTimerManager().SetTimer(RespawnTimerHandle, this, &UBattleRespawnSubsystem::RespawnPlayer, Player->RespawnDelay, false);
+	
+	// 恢复探索音乐
+	World->GetSubsystem<UBattleBGMSubsystem>()->PlayExplorationBGM();
 }
 
 // ============================================================================
