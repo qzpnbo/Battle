@@ -107,6 +107,10 @@ public:
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Attack")
     TArray<FName> AttackComboSectionNames = { TEXT("S0"), TEXT("S1"), TEXT("S2") };
 
+    // 攻击音效
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Attack|Sound")
+    USoundBase* attackSound = nullptr;
+
     // ============================================================================
     // 攻击数值配置
     // ============================================================================
@@ -159,6 +163,10 @@ public:
     // 右侧受击（攻击者在受击者右侧，角色向左歪）
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "HitReact")
     class UAnimMontage* HitReactMontage_R = nullptr;
+
+    // 受击音效
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "HitReact|Sound")
+    USoundBase* HitSound = nullptr;
 
     // ============================================================================
     // 翻滚无敌帧配置
@@ -379,7 +387,7 @@ public:
 
     // 受击判定（由角色 TakeDamage 调用），按优先级依次判断：
     //   死亡 → 无敌帧 → 被弹反增伤 → 格挡（弹反窗口 / 减伤 / 破防）→ 韧性（破韧才硬直）
-    // 会就地修改 Hit.Damage（格挡减伤、被弹反增伤），并负责播放对应的受击/格挡动画
+    // 会就地修改 Hit.Damage（格挡减伤、被弹反增伤），并负责播放对应的受击/格挡动画、受击音效
     EHitResponse ResolveIncomingHit(FIncomingHit& Hit, AActor* DamageCauser);
 
     // 自己的攻击被对方弹反：中断动作，进入大硬直，期间受到的伤害提高

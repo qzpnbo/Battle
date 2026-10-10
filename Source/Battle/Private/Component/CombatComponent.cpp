@@ -1282,6 +1282,9 @@ void UCombatComponent::Attack()
     // 绑定蒙太奇通知回调（On Notify Begin），用于连击判定 多播动态委托
     // 使用 AddUniqueDynamic：异常路径下未解绑时再次绑定不会触发 ensure / 重复回调
     AnimInstance->OnPlayMontageNotifyBegin.AddUniqueDynamic(this, &UCombatComponent::OnAttackMontageNotifyBegin);
+
+    // 攻击音效
+    PlayCombatSound(attackSound);
 }
 
 // ============================================================================
@@ -1853,6 +1856,7 @@ EHitResponse UCombatComponent::ResolveIncomingHit(FIncomingHit &Hit, AActor *Dam
     InterruptCurrentAction();
     SetCombatState(ECombatState::Staggered);
     PlayStaggerMontage(SelectDirectionalHitReact(DamageCauser));
+    PlayCombatSound(HitSound);
     return EHitResponse::Staggered;
 }
 
